@@ -1184,9 +1184,19 @@ const KP_STEPS = [
 
 async function loadKpayloadSteps(k, kbase, room) {
   const c = host();
-  const blob = await fetchBytes("kpayload.bin", "kp");
+  say("[kp] fetching kpayload.bin...");
+  var blob;
+  try {
+    blob = await Promise.race([
+      fetchBytes("kpayload.bin", "kp"),
+      new Promise(function(_, rej) { setTimeout(function() { rej(new Error("fetch timeout 15s")); }, 15000); })
+    ]);
+  } catch (fe) {
+    say("[kp] fetch failed: " + (fe && fe.message ? fe.message : String(fe)));
+    return false;
+  }
   if (!blob || !blob.length) { say("[kp] kpayload.bin not available"); return false; }
-  say("[kp] " + blob.length + " bytes inflated kpayload");
+  say("[kp] " + blob.length + " bytes fetched");
 
   const size = (0x50000 + blob.length + 0x4fff) & ~0xfff;
   const m = sc(S.mmap, 0, size + 0x1000, 3, 0x1002, -1, 0);

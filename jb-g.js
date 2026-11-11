@@ -1012,7 +1012,7 @@ let allDone = false,
          page may run that. */
       let agOk = false;
       try {
-        const ag = await import("./afterglow-g.js?v=1402s6");
+        const ag = await import("./afterglow-g.js?v=1402s7");
         // Exactly what afterglow reaches for, counted rather than guessed.
         const agCtx = {
           p: p, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
