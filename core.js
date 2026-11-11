@@ -32,11 +32,13 @@ const HX1400_LIGHT_CORE =
 const HX_MEM_LEVEL = (function () {
   try {
     const q = new URLSearchParams(location.search).get("mem");
-    const n = parseInt(q || (HX1400_LIGHT_CORE ? "2" : "0"), 10);
-    if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
+    // Default to mem=2 (1.5M slots) -- the heavy mem=0 profile clusters
+    // zero-header-miss and placement-throw failures on 14.02.
+    const n = parseInt(q || "2", 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 5) return n;
   } catch (e) {}
 
-  return HX1400_LIGHT_CORE ? 2 : 0;
+  return 2;
 })();
 
 const HX_MEM_PROFILES = [
