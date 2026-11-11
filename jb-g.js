@@ -1010,8 +1010,9 @@ let allDone = false,
       /* Arming requires a step from the landing page. A probe
          (afterglow=probe) fires no trigger and patches nothing, so a restored
          page may run that. */
+      let agOk = false;
       try {
-        const ag = await import("./afterglow-g.js?v=1402s3");
+        const ag = await import("./afterglow-g.js?v=1402s4");
         // Exactly what afterglow reaches for, counted rather than guessed.
         const agCtx = {
           p: p, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
@@ -1022,14 +1023,16 @@ let allDone = false,
         };
         if (params.get("afterglow") === "probe") {
           ag.probeAfterglow(agCtx);
+          agOk = true;
         } else {
-          await ag.runAfterglow(agCtx);
+          agOk = await ag.runAfterglow(agCtx);
+          if (!agOk) mark("AG-RESULT", "afterglow returned false");
         }
       } catch (agError) {
         mark("AG-FAIL", agError && agError.message ? agError.message : String(agError));
       }
       allDone = true;
-      finishUI(true);
+      finishUI(!!agOk);
       // Swap the address out. The browser restores the last one after a
       // reload, and an enabler that restarts SceShellUI causes exactly that
       // reload -- so the last address must not be the one that runs the

@@ -2470,12 +2470,18 @@ async function attempt(ctx, opts) {
 
   const want = (ctx.params && ctx.params.get("payload"));
   const mode = (ctx.params && ctx.params.get("mode")) || "";
-  if (mode === "kpstep") {
-    iface.payload = await loadKpayloadSteps(k, kbase, hostFree);
-  } else if (want !== "") {
-    iface.payload = (mode === "goldhen")
-      ? await loadEnabler(want || "goldhen.bin", k, kbase, hostFree)
-      : await loadPayload(want || "hen.bin");
+  try {
+    if (mode === "kpstep") {
+      iface.payload = await loadKpayloadSteps(k, kbase, hostFree);
+      if (!iface.payload) say("[post] kpayload steps did not complete cleanly");
+    } else if (want) {
+      iface.payload = (mode === "goldhen")
+        ? await loadEnabler(want || "goldhen.bin", k, kbase, hostFree)
+        : await loadPayload(want || "hen.bin");
+    }
+  } catch (plErr) {
+    say("[post] payload error: " + (plErr && plErr.message ? plErr.message : String(plErr)));
+    iface.payload = false;
   }
   /* ---- enable debug settings ---- */
   (function () {

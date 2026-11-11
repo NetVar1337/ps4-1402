@@ -7,8 +7,8 @@
 (function () {
   "use strict";
 
-  const COUNTDOWN_SEC = 5;
-  const DEST = "launch.html?v=1402s&log=1&afterglow=run&mode=goldhen&payload=goldhen.bin&g=drain:16&g=drainsz:0x4000";
+  const COUNTDOWN_SEC = 2;
+  const DEST = "launch.html?v=1402s&log=1&afterglow=run&mode=kpstep&g=drain:16&g=drainsz:0x4000";
 
   const countEl = document.getElementById("count"); // <p class="status" id="count">
   const content = document.querySelector(".content");
