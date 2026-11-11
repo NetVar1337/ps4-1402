@@ -5,8 +5,29 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Akatsuki Clan ☁</title>
     <link rel="stylesheet" href="style.css" />
+  <style>
+  #gate{position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:center;justify-content:center}
+  #gate-box{border:1px solid #cc0000;padding:40px 50px;text-align:center;font-family:'Courier New',Courier,monospace;min-width:280px;max-width:340px}
+  #gate-title{color:#ff0000;font-size:1rem;letter-spacing:.18em;text-shadow:0 0 10px #cc0000;margin-bottom:6px}
+  #gate-sub{color:#333;font-size:.72rem;letter-spacing:.1em;margin-bottom:28px}
+  #gate-input{display:block;width:100%;background:#0a0a0a;border:1px solid #331100;color:#ff0;padding:10px 14px;font-family:'Courier New',monospace;font-size:1.1rem;letter-spacing:.2em;text-align:center;outline:none;margin-bottom:14px;box-sizing:border-box}
+  #gate-input:focus{border-color:#cc0000}
+  #gate-btn{background:transparent;border:1px solid #cc0000;color:#00ff41;padding:9px 28px;font-family:'Courier New',monospace;font-size:.85rem;letter-spacing:.12em;cursor:pointer;width:100%;transition:background .12s,color .12s}
+  #gate-btn:hover{background:#cc0000;color:#000}
+  #gate-err{color:#ff0000;font-size:.75rem;margin-top:10px;letter-spacing:.08em;min-height:1.2em}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+  </style>
   </head>
   <body>
+    <div id="gate">
+      <div id="gate-box">
+        <div id="gate-title">[ AKATSUKI :: ACCESS REQUIRED ]</div>
+        <div id="gate-sub">&gt;&gt; daily access code</div>
+        <input id="gate-input" type="text" autocomplete="off" maxlength="20" placeholder="______">
+        <button id="gate-btn">[ ENTER ]</button>
+        <div id="gate-err"></div>
+      </div>
+    </div>
     <audio id="bgMusic" src="akatsuki.mp3" loop preload="auto" style="display:none"></audio>
 
     <canvas id="matrix"></canvas>
@@ -52,6 +73,36 @@
     (function() {
       var bgMusic = document.getElementById('bgMusic');
       if (bgMusic) { bgMusic.volume = 0.5; bgMusic.play().catch(function(){}); }
+    })();
+    </script>
+    <script>
+    (async function(){
+      var SALT='ak4ts0k1';
+      var d=new Date();
+      var today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      var data=new TextEncoder().encode(SALT+today);
+      var hash=await crypto.subtle.digest('SHA-256',data);
+      var hex=Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+      var pwd=hex.slice(0,6);
+      var gate=document.getElementById('gate');
+      var inp=document.getElementById('gate-input');
+      var btn=document.getElementById('gate-btn');
+      var err=document.getElementById('gate-err');
+      function attempt(){
+        if(inp.value.trim().toLowerCase()===pwd){
+          gate.style.transition='opacity .5s';
+          gate.style.opacity='0';
+          setTimeout(function(){gate.style.display='none'},500);
+        } else {
+          err.textContent='[ WRONG CODE ]';
+          inp.value='';
+          inp.style.animation='none';
+          void inp.offsetWidth;
+          inp.style.animation='shake .4s ease';
+        }
+      }
+      btn.addEventListener('click',attempt);
+      inp.addEventListener('keydown',function(e){if(e.key==='Enter')attempt()});
     })();
     </script>
     <script src="matrix.js?v=1402b"></script>
