@@ -6,20 +6,26 @@
     <title>Akatsuki Clan ☁</title>
     <link rel="stylesheet" href="style.css" />
   <style>
-  #gate{position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:center;justify-content:center}
-  #gate-box{border:1px solid #cc0000;padding:40px 50px;text-align:center;font-family:'Courier New',Courier,monospace;min-width:280px;max-width:340px}
-  #gate-title{color:#ff0000;font-size:1rem;letter-spacing:.18em;text-shadow:0 0 10px #cc0000;margin-bottom:6px}
-  #gate-sub{color:#333;font-size:.72rem;letter-spacing:.1em;margin-bottom:28px}
-  #gate-input{display:block;width:100%;background:#0a0a0a;border:1px solid #331100;color:#ff0;padding:10px 14px;font-family:'Courier New',monospace;font-size:1.1rem;letter-spacing:.2em;text-align:center;outline:none;margin-bottom:14px;box-sizing:border-box}
-  #gate-input:focus{border-color:#cc0000}
-  #gate-btn{background:transparent;border:1px solid #cc0000;color:#00ff41;padding:9px 28px;font-family:'Courier New',monospace;font-size:.85rem;letter-spacing:.12em;cursor:pointer;width:100%;transition:background .12s,color .12s}
-  #gate-btn:hover{background:#cc0000;color:#000}
-  #gate-err{color:#ff0000;font-size:.75rem;margin-top:10px;letter-spacing:.08em;min-height:1.2em}
+  #gate{position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #gate-canvas{position:absolute;inset:0;width:100%;height:100%}
+  #gate-box{position:relative;z-index:1;border:1px solid #cc0000;padding:40px 50px;text-align:center;font-family:'Courier New',Courier,monospace;min-width:280px;max-width:340px;background:rgba(0,0,0,0.88);animation:redPulse 2s ease-in-out infinite}
+  @keyframes redPulse{
+    0%,100%{box-shadow:0 0 8px #cc0000,0 0 20px #440000,inset 0 0 8px rgba(204,0,0,.08)}
+    50%{box-shadow:0 0 28px #ff0000,0 0 60px #cc0000,0 0 100px #550000,inset 0 0 22px rgba(255,0,0,.18)}
+  }
+  #gate-title{color:#ff0000;font-size:1rem;letter-spacing:.18em;text-shadow:0 0 10px #cc0000,0 0 22px #ff0000;margin-bottom:6px}
+  #gate-sub{color:#005500;font-size:.72rem;letter-spacing:.1em;margin-bottom:28px;text-shadow:0 0 8px #00ff41}
+  #gate-input{display:block;width:100%;background:#000;border:1px solid #330000;color:#ff0;padding:10px 14px;font-family:'Courier New',monospace;font-size:1.1rem;letter-spacing:.2em;text-align:center;outline:none;margin-bottom:14px;box-sizing:border-box;transition:border-color .2s,box-shadow .2s}
+  #gate-input:focus{border-color:#cc0000;box-shadow:0 0 10px #660000}
+  #gate-btn{background:transparent;border:1px solid #cc0000;color:#00ff41;padding:9px 28px;font-family:'Courier New',monospace;font-size:.85rem;letter-spacing:.12em;cursor:pointer;width:100%;transition:background .12s,color .12s,box-shadow .15s;text-shadow:0 0 6px #00ff41}
+  #gate-btn:hover{background:#cc0000;color:#000;box-shadow:0 0 18px #ff0000}
+  #gate-err{color:#ff0000;font-size:.75rem;margin-top:10px;letter-spacing:.08em;min-height:1.2em;text-shadow:0 0 6px #ff0000}
   @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
   </style>
   </head>
   <body>
     <div id="gate">
+      <canvas id="gate-canvas"></canvas>
       <div id="gate-box">
         <div id="gate-title">[ AKATSUKI :: ACCESS REQUIRED ]</div>
         <div id="gate-sub">&gt;&gt; daily access code</div>
@@ -70,13 +76,32 @@
     </div>
 
     <script>
-    (function() {
-      var bgMusic = document.getElementById('bgMusic');
-      if (bgMusic) { bgMusic.volume = 0.5; bgMusic.play().catch(function(){}); }
-    })();
-    </script>
-    <script>
     (async function(){
+      // ── matrix rain on gate overlay ──────────────────────────────────────
+      var gc=document.getElementById('gate-canvas');
+      var gx=gc.getContext('2d');
+      var chars='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+      var drops;
+      function resizeGate(){
+        gc.width=window.innerWidth;gc.height=window.innerHeight;
+        drops=Array(Math.floor(gc.width/14)).fill(1);
+      }
+      resizeGate();
+      window.addEventListener('resize',resizeGate);
+      function drawMatrix(){
+        gx.fillStyle='rgba(0,0,0,0.05)';
+        gx.fillRect(0,0,gc.width,gc.height);
+        gx.font='13px monospace';
+        for(var i=0;i<drops.length;i++){
+          gx.fillStyle=Math.random()>0.95?'#ffffff':'#00ff41';
+          gx.fillText(chars[Math.floor(Math.random()*chars.length)],i*14,drops[i]*14);
+          if(drops[i]*14>gc.height&&Math.random()>0.975)drops[i]=0;
+          drops[i]++;
+        }
+      }
+      var matrixTimer=setInterval(drawMatrix,45);
+
+      // ── daily password ───────────────────────────────────────────────────
       var SALT='ak4ts0k1';
       var d=new Date();
       var today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -84,15 +109,35 @@
       var hash=await crypto.subtle.digest('SHA-256',data);
       var hex=Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
       var pwd=hex.slice(0,6);
+
       var gate=document.getElementById('gate');
       var inp=document.getElementById('gate-input');
       var btn=document.getElementById('gate-btn');
       var err=document.getElementById('gate-err');
+
+      // nothing loads until password is correct
+      function unlock(){
+        clearInterval(matrixTimer);
+        gate.style.transition='opacity .6s';
+        gate.style.opacity='0';
+        setTimeout(function(){
+          gate.style.display='none';
+          var bgm=document.getElementById('bgMusic');
+          if(bgm){bgm.volume=0.5;bgm.play().catch(function(){});}
+          var s1=document.createElement('script');
+          s1.src='matrix.js?v=1402b';
+          document.body.appendChild(s1);
+          s1.onload=function(){
+            var s2=document.createElement('script');
+            s2.src='launch.js?v=1402b';
+            document.body.appendChild(s2);
+          };
+        },600);
+      }
+
       function attempt(){
         if(inp.value.trim().toLowerCase()===pwd){
-          gate.style.transition='opacity .5s';
-          gate.style.opacity='0';
-          setTimeout(function(){gate.style.display='none'},500);
+          unlock();
         } else {
           err.textContent='[ WRONG CODE ]';
           inp.value='';
@@ -105,7 +150,5 @@
       inp.addEventListener('keydown',function(e){if(e.key==='Enter')attempt()});
     })();
     </script>
-    <script src="matrix.js?v=1402b"></script>
-    <script src="launch.js?v=1402b"></script>
   </body>
 </html>
