@@ -1,5 +1,5 @@
 /* service worker — cache-first, full offline after first visit */
-const CACHE = "akatsuki-v7";
+const CACHE = "akatsuki-v8";
 const ASSETS = [
   "./",
   "./index.html",
