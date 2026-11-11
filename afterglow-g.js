@@ -916,12 +916,18 @@ function readFromUSB(filename) {
   return null;
 }
 
-async function loadEnabler(url, k, kbase, room) {
-  let blob = readFromUSB("payload.bin");
-  if (blob) {
-    say("[e] " + blob.length + " bytes from USB");
+async function loadEnabler(url, k, kbase, room, vorab) {
+  let blob = null;
+  if (vorab) {
+    blob = vorab;
+    say("[e] " + blob.length + " bytes (pre-fetched)");
   } else {
-    blob = await fetchBytes(url, "e");
+    blob = readFromUSB("payload.bin");
+    if (blob) {
+      say("[e] " + blob.length + " bytes from USB");
+    } else {
+      blob = await fetchBytes(url, "e");
+    }
   }
   if (blob === null || !blob) return false;
   if (blob.length === GH.nlOff + GH.nlLen) {
@@ -2040,6 +2046,21 @@ async function attempt(ctx, opts) {
     return false;
   }
 
+  /* pre-fetch the payload while HTTP is still alive -- kernel patches kill
+     the browser's network stack, so any fetch after that point freezes the
+     console forever.  Stash the bytes now; loadEnabler / loadPayload will
+     use this blob instead of hitting the dead network post-patch. */
+  let prefetchedPayload = null;
+  {
+    const pfWant = (ctx.params && ctx.params.get("payload"));
+    if (pfWant) {
+      say("[pre] fetching " + pfWant + " while network is live");
+      prefetchedPayload = await fetchBytes(pfWant, "pre");
+      if (prefetchedPayload) say("[pre] " + prefetchedPayload.length + " bytes stashed");
+      else say("[pre] HTTP miss -- will try USB post-patch");
+    }
+  }
+
   /* the free and the refill have to happen on one core, or they land in
      different per cpu buckets and the hole is never refilled */
   const pin = pinCore();
@@ -2600,8 +2621,8 @@ async function attempt(ctx, opts) {
     } else if (want) {
       say("[post] entering goldhen/payload path");
       iface.payload = (mode === "goldhen")
-        ? await loadEnabler(want || "goldhen.bin", k, kbase, hostFree)
-        : await loadPayload(want || "hen.bin");
+        ? await loadEnabler(want || "goldhen.bin", k, kbase, hostFree, prefetchedPayload)
+        : await loadPayload(want || "hen.bin", prefetchedPayload);
     } else {
       say("[post] no payload path matched -- skipping");
     }
