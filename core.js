@@ -1,6 +1,15 @@
 let DRAIN_COUNT = 512;
 const AUTO_RETRY_DELAY_MS = 50;
 
+// Synchronous busy-wait — PS4's WebKit event loop dies after freeing
+// millions of sprayed objects, so setTimeout callbacks never fire.
+// This spins the CPU for `ms` while still letting the GC reclaim memory
+// (JSC's GC can run during JS execution when allocation pressure hits).
+function syncDelay(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* spin */ }
+}
+
 const K = 2;
 const DUPLICATE_INDEX = 2;
 const CONTROL_INDEX = 0xffff;
@@ -526,13 +535,11 @@ function failed() {
   emit("AUTO-RETRY-AFTER-FAILURE", `attempt=${attemptNumber}`);
   stopped = false;
   retryScheduled = false;
-  setTimeout(() => {
-    try {
-      history.replaceState(null, "");
-    } catch {}
-    attemptNumber++;
-    startAttempt();
-  }, AUTO_RETRY_DELAY_MS);
+  // Synchronous retry — setTimeout dies on PS4 after massive GC
+  syncDelay(AUTO_RETRY_DELAY_MS);
+  try { history.replaceState(null, ""); } catch {}
+  attemptNumber++;
+  startAttempt();
 }
 
 function releaseAttemptAllocations() {
@@ -601,32 +608,33 @@ function scheduleSafeRetry(reason) {
   const nextAttempt = attemptNumber + 1;
   emit("AUTO-RETRY-SCHEDULED", `reason=${reason}-next-attempt=${nextAttempt}`);
   releaseAttemptAllocations();
-  setTimeout(
-    () => {
-      const candidateStillSafe =
-        !candidateEverReturned || (zeroHeaderMiss && !candidateMutationStarted);
-      if (
-        !retrySafe ||
-        !candidateStillSafe ||
-        candidateMutationStarted ||
-        stopped
-      ) {
-        emit(
-          "AUTO-RETRY-CANCELLED",
-          `reason=${reason}` +
-            `-retry-safe=${retrySafe}` +
-            `-candidate-safe=${candidateStillSafe}` +
-            `-candidate-mutated=${candidateMutationStarted}`,
-        );
-        failed();
-        return;
-      }
+  // Synchronous delay + direct call — PS4's WebKit event loop dies after
+  // releaseAttemptAllocations() frees millions of objects.  setTimeout
+  // callbacks never fire.  Busy-wait lets JSC's GC reclaim during the
+  // spin, then we check safety and call startAttempt() inline.
+  syncDelay(Math.max(AUTO_RETRY_DELAY_MS, 750));
 
-      attemptNumber = nextAttempt;
-      startAttempt();
-    },
-    Math.max(AUTO_RETRY_DELAY_MS, 750),
-  );
+  const candidateStillSafe =
+    !candidateEverReturned || (zeroHeaderMiss && !candidateMutationStarted);
+  if (
+    !retrySafe ||
+    !candidateStillSafe ||
+    candidateMutationStarted ||
+    stopped
+  ) {
+    emit(
+      "AUTO-RETRY-CANCELLED",
+      `reason=${reason}` +
+        `-retry-safe=${retrySafe}` +
+        `-candidate-safe=${candidateStillSafe}` +
+        `-candidate-mutated=${candidateMutationStarted}`,
+    );
+    failed();
+    return;
+  }
+
+  attemptNumber = nextAttempt;
+  startAttempt();
 }
 
 function finishEarlySafeAttempt(tag, extra, reason) {
