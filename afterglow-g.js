@@ -2065,7 +2065,17 @@ async function attempt(ctx, opts) {
     const pfWant = (ctx.params && ctx.params.get("payload"));
     if (pfWant) {
       say("[pre] fetching " + pfWant + " while network is live");
-      prefetchedPayload = await fetchBytes(pfWant, "pre");
+      try {
+        prefetchedPayload = await Promise.race([
+          fetchBytes(pfWant, "pre"),
+          new Promise(function (_, rej) {
+            setTimeout(function () { rej(new Error("pre-fetch timeout 8s")); }, 8000);
+          })
+        ]);
+      } catch (e) {
+        say("[pre] fetch failed: " + (e && e.message));
+        prefetchedPayload = null;
+      }
       if (prefetchedPayload) say("[pre] " + prefetchedPayload.length + " bytes stashed");
       else say("[pre] HTTP miss -- will try USB post-patch");
     }
