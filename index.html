@@ -268,8 +268,9 @@
       var matrixTimer = setInterval(drawMatrix, 40);
 
       /* ── unlock ─────────────────────────────────────────────────── */
+      /* PASSWORD DISABLED — re-enable: remove "true ||" on the line below */
       function attempt() {
-        if (input.value === PASS) {
+        if (true || input.value === PASS) {
           /* stop gate matrix, fade overlay, then inject scripts */
           clearInterval(matrixTimer);
           overlay.classList.add("fade-out");
