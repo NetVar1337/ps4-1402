@@ -139,10 +139,16 @@ const CARRIER_MAX = 9000000; // 72 MB
 function growCarrier(minSlots) {
   const cap = Math.min(CARRIER_CAP, CARRIER_MAX);
   if (CARRIER_SLOTS >= cap) return false;
-  // Grow EXACTLY, with no margin: `minSlots` is the measured need
-  // (ceil(need/8)), and every byte beyond it is heap pressure for nothing.
   if (minSlots > cap) return false;
-  CARRIER_SLOTS = Math.min(cap, Math.max(minSlots, CARRIER_SLOTS * 4));
+  // Large-regime (minSlots >= 4M): jump straight to cap in one step.
+  // copiedLength scales with CARRIER_SLOTS, so a mid-point grow only
+  // triggers a second grow cycle -- and the double free/GC/alloc of a
+  // 35-72 MB carrier hangs PS4's WebKit between attempts. Small-regime
+  // stays on the 4x path.
+  const next = minSlots >= 4000000
+    ? cap
+    : Math.min(cap, Math.max(minSlots, CARRIER_SLOTS * 4));
+  CARRIER_SLOTS = next;
   CARRIER_BYTES = CARRIER_SLOTS * 8;
   return true;
 }
