@@ -2,6 +2,7 @@ import { establishPrimitive } from "./core.js?v=1402";
 import { installWindowP, pairStatus } from "./mem.js?v=1402";
 import { int64 } from "./int64.js?v=1402";
 import { offsetsFor, PS4 } from "./ps4_offsets.js?v=1402";
+import * as afterglowModule from "./afterglow-g.js?v=1402s11";
 
 const outEl = document.getElementById("out");
 const stateEl = document.getElementById("state");
@@ -1007,12 +1008,15 @@ let allDone = false,
     }
 
     if (params.get("afterglow")) {
-      /* Arming requires a step from the landing page. A probe
-         (afterglow=probe) fires no trigger and patches nothing, so a restored
-         page may run that. */
+      /* afterglow-g.js is now a static import at the top of this file so the
+         browser's module loader resolves it at page-load time -- before any
+         exploit code runs and before the heap is stressed by addrof attempts.
+         The dynamic await import() that was here hung the PS4's WebKit after
+         the exploit setup trashed the C++ networking layer. */
+      mark("AG-HANDOFF", "afterglow module pre-loaded, handing off");
       let agOk = false;
       try {
-        const ag = await import("./afterglow-g.js?v=1402s11");
+        const ag = afterglowModule;
         // Exactly what afterglow reaches for, counted rather than guessed.
         const agCtx = {
           p: p, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
