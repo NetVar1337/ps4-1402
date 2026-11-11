@@ -1093,9 +1093,14 @@ async function loadRawKernel(url, k, kbase, room, vorab) {
   const markRead = function () { return [rd4(plus(buf, GH.mark)), rd4(plus(buf, GH.mark + 4))]; };
 
   say("[p] kernel base " + text(kbase) + ", padding " + text(t));
-  say("[p] ---> calling runPatchSet");
-  if (!(await runPatchSet(room))) return false;
-  say("[p] patchset ok ---> calling paddingRW");
+  if (K.anchor !== 0xe6c30) {
+    say("[p] ---> calling runPatchSet");
+    if (!(await runPatchSet(room))) return false;
+    say("[p] patchset ok");
+  } else {
+    say("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
+  }
+  say("[p] ---> calling paddingRW");
   if (!paddingRW(k, kbase)) { say("[p] stopping: padding would stay read only"); return false; }
 
   /* whole loader image (loader + zlib + trailer) into the padding, PIC */
