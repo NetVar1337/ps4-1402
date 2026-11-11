@@ -1076,8 +1076,8 @@ async function loadRawKernel(url, k, kbase, room, vorab) {
      whether [5] freezes inside the loader's own inflate/elf_load (loader-side
      imports) or inside the kpayload's entry (GoldHEN's 14.02 port). With the
      call gone eax stays 0 and [5] returns clean. */
-  for (let o = 0; o < 4; o++) wr1(plus(buf, 0x1136 + o), 0x90);
-  say("[p] diag: NOP'd console-output write (0x1068) and kpayload entry call (0x1136)");
+  /* kpayload entry call at 0x1136 (ff 54 24 08) is kept intact -- GoldHEN runs */
+  say("[p] console-output write NOP'd (0x1068); kpayload entry call intact (0x1136)");
 
   const t = plus(kbase, GH.rvaPad);
   const tram = { n: 0 };
@@ -1288,7 +1288,7 @@ async function loadKpayloadSteps(k, kbase, room) {
 const GH = {
   tor: 0x47c00, tram: 0x47c40, mark: 0x47e80, kptr: 0x47b20,
   nlOff: 0x50000, nlLen: 636760,
-  rvaPad: 0x10ff000, rvaKmem: 0x466540,
+  rvaPad: 0x10ff000, rvaKmem: 0x466c40,  /* 14.02: kmem_malloc at +0x466c40 (was 0x466540 on 14.00) */
 };
 
 const GH_STEPS = [
