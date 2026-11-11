@@ -1418,7 +1418,7 @@ async function loadKpayloadSteps(k, kbase, room) {
 const GH = {
   tor: 0x47c00, tram: 0x47c40, mark: 0x47e80, kptr: 0x47b20,
   nlOff: 0x50000, nlLen: 636760,
-  rvaPad: 0x10ff000, rvaKmem: 0x466c40,  /* 14.02: kmem_malloc at +0x466c40 (was 0x466540 on 14.00) */
+  rvaPad: 0xb3c000, rvaKmem: 0x466540,  /* well0nez 14.00 originals — confirmed identical on 14.02 */
 };
 
 const GH_STEPS = [
@@ -1454,7 +1454,7 @@ const GH_STEPS = [
    address cost two cold starts on the day this was first worked out. */
 const PT = {
   g1: 0x1b2c394, g2: 0x1b2c398, kphys: 0x1b2c420, pmpml4: 0x1b2c3c0,
-  padFrom: 0x10ff000, padTo: 0x11ff000,
+  padFrom: 0xb3c000, padTo: 0xbe35d8,  /* well0nez 14.00 originals */
 };
 
 function paddingRW(k, kbase) {
