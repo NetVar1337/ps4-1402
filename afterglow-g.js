@@ -1094,13 +1094,9 @@ async function loadRawKernel(url, k, kbase, room, vorab) {
   const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
   say("[p] kernel base " + text(kbase) + ", padding " + text(t));
-  if (K.anchor !== 0xe6c30) {
-    say("[p] ---> calling runPatchSet");
-    if (!(await runPatchSet(room))) return false;
-    say("[p] patchset ok");
-  } else {
-    say("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
-  }
+  say("[p] ---> calling runPatchSet");
+  if (!(await runPatchSet(room))) return false;
+  say("[p] patchset ok");
   say("[p] ---> calling paddingRW");
   const dmapPad = paddingRW(k, kbase);
   if (!dmapPad) { say("[p] stopping: padding would stay read only"); return false; }
