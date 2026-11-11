@@ -1093,18 +1093,18 @@ async function loadRawKernel(url, k, kbase, room, vorab) {
   const markRead = function () { return [rd4(plus(buf, GH.mark)), rd4(plus(buf, GH.mark + 4))]; };
   const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
-  saySync("[p] kernel base " + text(kbase) + ", padding " + text(t));
+  say("[p] kernel base " + text(kbase) + ", padding " + text(t));
   if (K.anchor !== 0xe6c30) {
-    saySync("[p] ---> calling runPatchSet");
+    say("[p] ---> calling runPatchSet");
     if (!(await runPatchSet(room))) return false;
-    saySync("[p] patchset ok");
+    say("[p] patchset ok");
   } else {
-    saySync("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
+    say("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
   }
-  saySync("[p] ---> calling paddingRW");
+  say("[p] ---> calling paddingRW");
   const dmapPad = paddingRW(k, kbase);
-  if (!dmapPad) { saySync("[p] stopping: padding would stay read only"); return false; }
-  saySync("[p] paddingRW ok, dmap " + text(dmapPad));
+  if (!dmapPad) { say("[p] stopping: padding would stay read only"); return false; }
+  say("[p] paddingRW ok, dmap " + text(dmapPad));
 
   /* whole loader image (loader + zlib + trailer) into the padding via DMAP, PIC */
   tram.n = 0;
