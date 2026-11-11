@@ -125,7 +125,7 @@ const HX_MEM =
 // 1.85 MB is enough. So the carrier starts small and grows only when
 // `sourceCovered` rejects an attempt, which keeps the largest piece of work
 // out of the window in which fakeHost's layout has to hold still.
-const CARRIER_CAP = HX_MEM ? HX_MEM.slots : 12000000;
+const CARRIER_CAP = 9000000; // always CARRIER_MAX; HX_MEM.slots caps groom only, not carrier
 
 let CARRIER_SLOTS = Math.min(CARRIER_CAP, 400000);
 let CARRIER_BYTES = CARRIER_SLOTS * 8;
