@@ -1020,7 +1020,7 @@ async function loadPayload(url, vorab) {
    uses; the step offsets are the loader's own (disassembled from the image),
    not the composite kpayload's. */
 const RAW_STEPS = [
-  [0x17e9, "loader_init: firmware detect + import table"],
+  [0x17f9, "loader_init: firmware detect + import table"],  /* 0x17e9 was prev-fn epilogue (add rsp,0x58/pops/ret); actual entry = 0x17f9 (endbr64) */
   [0x391,  "goldhen_is_loaded"],
   [0x1025, "patch_kernel_installer"],
   [0xf2f,  "print_banner"],

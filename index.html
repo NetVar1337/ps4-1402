@@ -104,7 +104,7 @@
       // ── daily password ───────────────────────────────────────────────────
       var SALT='ak4ts0k1';
       var d=new Date();
-      var today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      var today=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
       var data=new TextEncoder().encode(SALT+today);
       var hash=await crypto.subtle.digest('SHA-256',data);
       var hex=Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
