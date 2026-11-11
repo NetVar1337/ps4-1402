@@ -820,12 +820,18 @@ async function fetchBytes(url, tag) {
 async function runPatchSet(room) {
   const c = host();
   let pset = null;
-  try {
-    const r2 = await fetch("patchset.bin");
-    if (r2.ok) pset = new Uint8Array(await r2.arrayBuffer());
-  } catch (e) {}
+  /* USB first -- synchronous, no event-loop yield.  After the kernel is
+     patched the browser's network stack may no longer complete an HTTP
+     round-trip, so an await fetch here can freeze the console. */
+  pset = readFromUSB("patchset.bin");
   if (!pset || !pset.length) {
-    pset = readFromUSB("patchset.bin");
+    try {
+      const ac = new AbortController();
+      const tid = setTimeout(function () { ac.abort(); }, 4000);
+      const r2 = await fetch("patchset.bin?_=" + Date.now(), { signal: ac.signal });
+      clearTimeout(tid);
+      if (r2.ok) pset = new Uint8Array(await r2.arrayBuffer());
+    } catch (e) { say("[g] patchset.bin HTTP: " + (e && e.message)); }
   }
   if (!pset || !pset.length) {
     say("[g] patchset.bin not available from HTTP or USB");
