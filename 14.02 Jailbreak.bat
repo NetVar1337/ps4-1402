@@ -1,44 +1,59 @@
 @echo off
-:: ============================================================
-::  NanospeedGamer -- PS4 14.00 / 14.02 exploit host
+:: =============================================================
+::  Akatsuki Clan -- PS4 14.00 / 14.02 exploit host
 ::
 ::  Usage:
-::    serve.bat            (port 8000)
+::    serve.bat            (port 8765)
 ::    serve.bat 8080       (custom port)
 ::
-::  Requirements: Python 3 installed and on PATH
-::  Admin panel:  URL printed on startup (new key every restart)
-:: ============================================================
+::  Requirements: Python 3 on PATH
+:: =============================================================
 
 setlocal enabledelayedexpansion
 
-set PORT=8000
+set PORT=8765
 if not "%~1"=="" set PORT=%~1
 
 cd /d "%~dp0"
 
 echo.
-echo  NanospeedGamer exploit host
-echo  ----------------------------
+echo  Akatsuki Clan -- PS4 Exploit Host
+echo  ------------------------------------
 
-:: ── Detect Python ─────────────────────────────────────────────────────────
+:: Detect python
 set PYCMD=
-where python >nul 2>&1
-if %errorlevel%==0 set PYCMD=python
-
-if "!PYCMD!"=="" (
-    where python3 >nul 2>&1
-    if %errorlevel%==0 set PYCMD=python3
-)
+where python >nul 2>&1 && set PYCMD=python
+if "!PYCMD!"=="" where python3 >nul 2>&1 && set PYCMD=python3
 
 if "!PYCMD!"=="" (
     echo.
-    echo  ERROR: Python 3 was not found on PATH.
+    echo  ERROR: Python 3 not found on PATH.
     echo.
     echo  Fix:
-    echo    1. Download Python 3 from  https://python.org/downloads
-    echo    2. During install, tick "Add Python to PATH"  ^<-- important
-    echo    3. Close this window and double-click serve.bat again.
+    echo    1. Download Python 3 from https://python.org/downloads
+    echo    2. Tick "Add Python to PATH" during install
+    echo    3. Reopen this window and try again.
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Confirm real Python, not the Store stub
+!PYCMD! --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo  ERROR: ^'python^' found but won^'t run. Install Python 3 from python.org
+    echo  and tick "Add Python to PATH".
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Confirm server.py is here
+if not exist "%~dp0server.py" (
+    echo.
+    echo  ERROR: server.py not found next to serve.bat.
+    echo  Make sure both files are in the same folder.
     echo.
     pause
     exit /b 1
@@ -47,13 +62,12 @@ if "!PYCMD!"=="" (
 echo  Using: !PYCMD!
 echo.
 
-:: ── Run server ────────────────────────────────────────────────────────────
 !PYCMD! "%~dp0server.py" %PORT%
 
 echo.
 if %errorlevel% neq 0 (
-    echo  ERROR: Server exited with code %errorlevel%.
-    echo  Make sure port %PORT% is not already in use and try again.
+    echo  Server stopped with error code %errorlevel%.
+    echo  Check above for the Python error message.
 ) else (
     echo  Server stopped.
 )
