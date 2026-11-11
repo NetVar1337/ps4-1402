@@ -2468,23 +2468,31 @@ async function attempt(ctx, opts) {
       ? "handles defused -- this page may close"
       : "the handles are NOT defused -- do not let this page close");
 
+  say("[post] starting payload dispatch");
   const want = (ctx.params && ctx.params.get("payload"));
   const mode = (ctx.params && ctx.params.get("mode")) || "";
+  say("[post] mode=" + mode + " payload=" + String(want));
   try {
     if (mode === "kpstep") {
+      say("[post] entering kpstep path");
       iface.payload = await loadKpayloadSteps(k, kbase, hostFree);
       if (!iface.payload) say("[post] kpayload steps did not complete cleanly");
     } else if (want) {
+      say("[post] entering goldhen/payload path");
       iface.payload = (mode === "goldhen")
         ? await loadEnabler(want || "goldhen.bin", k, kbase, hostFree)
         : await loadPayload(want || "hen.bin");
+    } else {
+      say("[post] no payload path matched -- skipping");
     }
   } catch (plErr) {
     say("[post] payload error: " + (plErr && plErr.message ? plErr.message : String(plErr)));
     iface.payload = false;
   }
   /* ---- enable debug settings ---- */
-  (function () {
+  /* skip the heavy kernel text/data scan when kpstep already applied patches */
+  if (mode === "kpstep") { say("[dbg] skipped -- kpayload handles debug settings"); }
+  else try { (function () {
     var TEXT_SIZE = 0xCFE880;
     var DATA_OFF  = 0x1520000;
 
@@ -2577,7 +2585,7 @@ async function attempt(ctx, opts) {
     }
     k.apply(kbase, plist);
     say("debug menu enabled -- go to Settings");
-  })();
+  })(); } catch (dbgErr) { say("[dbg] debug menu scan failed: " + (dbgErr && dbgErr.message ? dbgErr.message : String(dbgErr))); }
 
   say("[dump-check] dump=" + (ctx.params ? ctx.params.get("dump") : "no-params"));
   /* ---- kernel dumper (triggered by ?dump=kernel) ---- */
